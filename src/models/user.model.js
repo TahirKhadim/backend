@@ -61,29 +61,31 @@ Userschema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 Userschema.methods.generateaccesstoken = function () {
-  jwt.sign(
+  return jwt.sign(
     {
       _id: this._id,
       email: this.email,
-      fullName: this.fullName,
+      fullName: this.fullname,
       userName: this.username,
     },
-    process.env.ACCESS_TOKEN_SECRET
-  ),
+    process.env.ACCESS_TOKEN_SECRET,
     {
       expiresIn: process.env.ACCESS_TOKEN_Expiry,
-    };
+    }
+  );
 };
+
 Userschema.methods.generaterefreshtoken = function () {
-  jwt.sign(
+  return jwt.sign(
     {
       _id: this._id,
     },
-    process.env.REFRESH_TOKEN_SECRET
-  ),
+    process.env.REFRESH_TOKEN_SECRET,
     {
       expiresIn: process.env.REFRESH_TOKEN_Expiry,
-    };
+    }
+  );
 };
+
 
 export const user = mongoose.model("user", Userschema);

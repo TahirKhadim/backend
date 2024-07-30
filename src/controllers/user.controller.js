@@ -5,11 +5,30 @@ import { ApiResponse } from "../utils/apiresponse.js";
 
 import { user } from "../models/user.model.js";
 
+const generateAccessAndRefereshTokens = async(UserId) =>{
+  try {
+      const User = await user.findById(UserId)
+      const accesstoken = User.generateaccesstoken()
+      const refreshtoken = User.generaterefreshtoken()
+
+      User.refreshtoken = refreshtoken
+      await User.save({ validateBeforeSave: false })
+
+      return {accesstoken, refreshtoken}
+
+
+  } catch (error) {
+      throw new Apierror(500, "Something went wrong while generating referesh and access token")
+  }
+}
+
+
+
 const registeruser = asynchandler(async (req, res) => {
   //get user details
 
   const { username, fullname, email, password } = req.body;
-  // console.log(username);
+  console.log(req.body);
 
   //validation not empty
   if (
@@ -30,6 +49,7 @@ const registeruser = asynchandler(async (req, res) => {
   const avatarlocalpath = req.files?.avatar[0]?.path;
 
   const coverimagelocalpath = req.files?.coverimage[0]?.path;
+  console.log(req.files);
 
   if (!avatarlocalpath) {
     throw new Apierror(400, "avatar image required ");
@@ -61,8 +81,78 @@ const registeruser = asynchandler(async (req, res) => {
   }
   console.log(createduser);
   return res
-    .send("welcome")
+    .status(201)
     .json(new ApiResponse(200, createduser, "usercreated successfully !!"));
 });
 
-export { registeruser };
+const loginuser = asynchandler(async (req, res) => {
+  try {
+    // Get form data
+    const { username, email, password } = req.body;
+    console.log(email);
+
+    // Check for null values
+    if (!(username || email)) {
+      throw new Apierror(404, "Email or username required");
+    }
+
+    // Find the user
+    const User = await user.findOne({
+      $or: [{ email }, { username }],
+    });
+
+    // Check if the user is found
+    if (!User) {
+      throw new Apierror(404, "User not found");
+    }
+
+    // If user is found, check the password
+    const isPasswordValid = await User.isPasswordCorrect(password);
+    if (!isPasswordValid) {
+      throw new Apierror(404, "Invalid credentials");
+    }
+
+    console.log(isPasswordValid);
+    // Generate access and refresh tokens
+    const tokens = await generateAccessAndRefereshTokens(User._id);
+    const { accesstoken, refreshtoken } = tokens;
+
+    const option = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    // Send response with access token in cookie
+    return res
+      .status(200)
+      .cookie("accesstoken", accesstoken, option)
+      .json({ success: true, message: "Login successful", accesstoken, refreshtoken });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+const logoutuser = asynchandler(async (req, res) => {
+  await user.findByIdAndUpdate(
+    req.User_id,
+    {
+      $unset: {
+        refreshtoken: undefined,
+      },
+    },
+    { new: true }
+  );
+
+  const option = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("refreshtoken", option)
+    .json(new ApiResponse(200, {}, "logout"));
+});
+
+export { registeruser, loginuser, logoutuser };
