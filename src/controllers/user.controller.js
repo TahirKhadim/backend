@@ -4,6 +4,7 @@ import { uploadOnCloudinary } from "../utils/clodniary.js";
 import { ApiResponse } from "../utils/apiresponse.js";
 
 import { user } from "../models/user.model.js";
+import mongoose from "mongoose";
 
 const generateAccessAndRefereshTokens = async(UserId) =>{
   try {
@@ -155,4 +156,172 @@ const logoutuser = asynchandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "logout"));
 });
 
-export { registeruser, loginuser, logoutuser };
+const changePassword=asynchandler(async(req,res)=>{
+  const {oldpassword,newpassword}=req.body
+  const User=await user.findById(req.User._id)
+  const isPasswordCorrect=await User.isPasswordCorrect(oldpassword)
+  if(!isPasswordCorrect){
+    throw new Apierror(400,"password not correct")
+  }
+  user.password=newpassword
+  await user.save({validateBeforeSave:false})
+  return res.status(200).json(new ApiResponse(200,{},"password update successfully"))
+})
+const getCurrentUser=asynchandler(async(req,res)=>{
+  return res.status(200).json(200,req.User,"user fetched successfuly")
+})
+
+const updateUserinfo=asynchandler(async(req,res)=>{
+const {fullname,email}=req.body
+
+if(!(email || fullname)){
+  throw new Apierror(400,"required all fields")
+}
+const User=await user.findByIdAndUpdate(req.User?._id,{
+  $set:{
+fullname,email
+  }
+},{
+  new:true
+}.select("-password"))
+
+return res.status(200).json(new ApiResponse(200, User,"user details updated successfully"))
+})
+
+// file updation 
+
+const updatecavatar=asynchandler(async(req,res)=>{
+  const avatarlocalpath=req.file?.path
+  if(!avatarlocalpath){
+    throw new Apierror(404,"path not found" )
+  }
+  // upload on cloudnary
+
+  const avatar=await uploadOnCloudinary(avatarlocalpath)
+if(!avatar){
+  throw new Apierror(400,"updated avatar not found ")
+}
+const User=await user.findByIdAndUpdate(req.User._id,{
+  $set:{
+    avatar:avatar.url
+  }
+},{new:true}.select("-password"))
+
+return res.status(200).json(new ApiResponse(200,User,"avatarupdated successfully"))
+})
+
+const updatecoverimage=asynchandler(async(req,res)=>{
+  const cimagelocalpath=req.file?.path
+  if(!cimagelocalpath){
+    throw new Apierror(404,"path not found" )
+  }
+  // upload on cloudnary
+
+  const coverimage=await uploadOnCloudinary(cimagelocalpath)
+if(!coverimage){
+  throw new Apierror(400,"updated avatar not found ")
+}
+const User=await user.findByIdAndUpdate(req.User._id,{
+  $set:{
+    coverimage:coverimage.url
+  }
+},{new:true}.select("-password"))
+
+return res.status(200).json(new ApiResponse(200,User,"avatarupdated successfully"))
+})
+
+const getUserchannelProfile=asynchandler(async(req,res)=>{
+
+  const {username}=req.params
+
+  if(!username?.trim()){
+    throw new Apierror(404, "user not found")
+  }
+  const channel=await user.aggregate[
+    {
+      $match:{
+        username:username.toLowerCase()
+      }
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers"
+      }
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribeto"
+      }
+    },
+    {
+      $addFields: {
+        subscribers:{
+        $size:"$subscribers"  
+        },
+        subscribeto:{
+          $size:"$subscribeto"  
+          },
+        issubscribe:{
+            $cond:{
+              if:{$in: [req.user?._id,"subscribers.subscriber"]},
+              then:true,
+              else:false
+            }
+        }
+      }
+      
+    },
+    {
+      $project:{
+        fullname:1,
+        email:1,
+        avatar:1,
+        coverimage:1,
+        issubscribe:1,
+        subscribeto:1,
+        subscribers:1
+
+
+
+      }
+    }
+  ]
+  
+  if(!channel){
+throw new Apierror(404,"channel details not found")
+  }
+  return res.status(200).json(new ApiResponse(200,channel,"channel details detched successgully"))
+})
+
+const getuserhistory=asynchandler(async(req,res)=>{
+  const history=await user.aggregate[
+
+    {
+      $match:{
+        _id:new mongoose.Types.ObjectId(req.User._id)
+      }
+    },
+    {
+      $lookup:{
+         from:"videos",
+         localField:"watchhistory",
+         foreignField:"_id",
+         as: "users"
+    },
+    
+      $lookup:{
+         from:"users",
+         localField:"owner",
+         foreignField:"watchhistory",
+         as: "history"
+    }
+  }
+  ]
+})
+export { registeruser, loginuser, logoutuser, updatecoverimage,updatecavatar,updateUserinfo,getCurrentUser,changePassword};

@@ -41,4 +41,4 @@ isPublished:{
 
 VideoSchema.plugin(mongooseAggregatePaginate)
 
-export const Video=('Video',VideoSchema);
+export const Video=mongoose.model('Video',VideoSchema);
